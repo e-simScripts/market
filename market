@@ -1,0 +1,110 @@
+// ==UserScript==
+// @name ProductMarketExtension
+// @description Shows gold price Products
+// @namespace Violentmonkey Scripts
+// @grant none+
+// @include *.e-sim.org/productMarket.html*
+// ==/UserScript==
+ 
+/**
+ * Main
+ *
+ */
+$(document).ready(function() {
+    var aMMObj = getMMcontent();
+    var fGoldRatio = getGoldRatio(aMMObj);
+    modifyTable(fGoldRatio);
+});
+ 
+/**
+ * Modify job market table
+ * @Param {Object} JSON Object aObj of taxes.
+ * @Param
+ */
+function modifyTable(fGoldRatio) {
+    var aRows = $('[class="dataTable"] tr');
+    aRows = aRows.slice(1, aRows.length)
+    for (i = 0; i < aRows.length; i++) {
+        var aCell = $("td", aRows[i]);
+        var nProduct = parseFloat($('b', aCell[3]).html());
+        var fProductWoTax = nProduct;
+        var sCountry = $('[class*="flags-small"]', aCell[3])[0].className.split(' ')[1];
+        var aCellClone = $(aCell[3]).clone();
+        $('div', aCellClone).remove();
+        $('b', aCellClone).remove();
+        var sCurrency = aCellClone[0].innerHTML.trim();
+        var fInGold = Math.round(fGoldRatio  *fProductWoTax*  10000) / 10000;
+ 
+        $(aCell[3]).append('<br/></br><div class="flags-small Gold"></div><b>' + fInGold + '</b> ');
+    }
+ 
+}
+ 
+/**
+ * @Return {Object} JSON Object of monetary market content.
+ *
+ */
+function getMMcontent() {
+ 
+    var sHtml;
+ 
+    var nCountryId = parseInt($('#countryId').find(":selected").attr('value'));
+ 
+    $.ajax({
+        type: "GET",
+        dataType: "html",
+        async: false,
+        url: "/monetaryMarket.html?buyerCurrencyId=" + nCountryId + "&sellerCurrencyId=0",
+        success: function(html) {
+            sHtml = html;
+        }
+    });
+ 
+    var aHtmlDOM = $.parseHTML(sHtml);
+    var aMMtab = $("[class='dataTable']", aHtmlDOM)[0];
+    var aRows = $("tr", aMMtab);
+    aRows = aRows.slice(1, aRows.length);
+    var aResult = [];
+   
+    for (i = 0; i < aRows.length; i++) {
+        aResult[i] = {};
+        var aCell = $("td", aRows[i]);
+ 
+        var aSeller = $("[class='profileLink'], a[href*='stockCompany']", aCell[0]);
+        var bIsStock = false;
+ 
+        if ($("[class='profileLink']", aCell[0]).length) {
+            var nSellerId = parseInt(aSeller.attr('href').match(/profile\.html\?id=([0-9]*)/)[1]);
+        } else if ($("a[href*='stockCompany']", aCell[0]).length) {
+            var bIsStock = true;
+            var nSellerId = parseInt(aSeller.attr('href').match(/stockCompany\.html\?id=([0-9]*)/)[1]);
+        }
+ 
+        var fCurrencyAmount = parseFloat($("b", aCell[1]).attr('title'));
+        var fCurrencyPrice = parseFloat($("b", aCell[2]).html());
+        var nOfferId = parseInt($("[name='id']", aCell[3]).attr('value'));
+ 
+        aResult[i]['nSellerId'] = nSellerId;
+        aResult[i]['fCurrencyAmount'] = fCurrencyAmount;
+        aResult[i]['fCurrencyPrice'] = fCurrencyPrice;
+        aResult[i]['nOfferId'] = nOfferId;
+        aResult[i]['bIsStock'] = bIsStock;
+    }
+ 
+    return aResult;
+}
+ 
+/**
+ * @Param {Object} aObjMM JSON Object of MM content.
+ * @Return {Number} gold ratio.
+ *
+ */
+function getGoldRatio(aMMObj) {
+    if (aMMObj.length) {
+        for (i = 0; i < aMMObj.length; i++) {
+            if (aMMObj[i].fCurrencyAmount > 100) {
+                return aMMObj[i].fCurrencyPrice;
+            }
+        }
+    }
+}
